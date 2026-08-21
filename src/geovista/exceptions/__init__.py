@@ -1,4 +1,4 @@
-from .base import MyCompanyError
+from .base import GeoVistaError
 from .validation import ValidationError
 from .authentication import AuthenticationError
 from .not_found import NotFoundError
@@ -8,7 +8,7 @@ from .network import NetworkError
 
 
 __all__ = [
-    "MyCompanyError",
+    "GeoVistaError",
     "ValidationError",
     "AuthenticationError",
     "NotFoundError",

@@ -1,25 +1,22 @@
-from mycompany import MyCompanyClient
-from mycompany.exceptions import AuthenticationError
+from geovista import GeoVistaClient
 
-
-client = MyCompanyClient(
+client = GeoVistaClient(
     api_key="test-api-key",
-    base_url="http://127.0.0.1:8000",
-    max_retries=0
+    base_url="http://127.0.0.1:8000"
 )
 
 try:
+    print("Creating dataset...")
+    ds = client.datasets.create(
+        name="Demo Dataset",
+        description="Dataset for testing GeoVista SDK features"
+    )
+    print(f"Created: {ds.id} - {ds.name}")
 
-    users = client.users.list()
-
-    print("Request successful:")
-    print(users)
-
-except AuthenticationError as error:
-
-    print("Authentication Error:")
-    print(error)
+    print("Listing datasets...")
+    datasets = client.datasets.list()
+    for d in datasets:
+        print(f"Dataset: {d.id} - {d.name}")
 
 finally:
-
     client.close()

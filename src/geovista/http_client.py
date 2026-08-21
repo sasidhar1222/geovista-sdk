@@ -1,4 +1,7 @@
+import time
 import httpx
+
+from .logger import get_logger
 
 from .exceptions import (
     ValidationError,
@@ -10,7 +13,7 @@ from .exceptions import (
 )
 
 
-class AsyncHttpClient:
+class HttpClient:
 
     def __init__(
         self,
@@ -25,7 +28,9 @@ class AsyncHttpClient:
         self.timeout = timeout
         self.max_retries = max_retries
 
-        self.client = httpx.AsyncClient(
+        self.logger = get_logger()
+
+        self.client = httpx.Client(
             base_url=self.base_url,
             timeout=timeout,
             headers={
@@ -36,7 +41,7 @@ class AsyncHttpClient:
         )
 
     # ==========================================
-    # RETRY
+    # RETRY CHECK
     # ==========================================
 
     def _should_retry(
@@ -66,7 +71,7 @@ class AsyncHttpClient:
     # RESPONSE HANDLER
     # ==========================================
 
-    async def _handle_response(
+    def _handle_response(
         self,
         response: httpx.Response
     ):
@@ -98,12 +103,14 @@ class AsyncHttpClient:
                     or "API request failed."
                 )
 
+            # 400
             if status_code == 400:
 
                 raise ValidationError(
                     message
                 ) from error
 
+            # 401
             if status_code == 401:
 
                 raise AuthenticationError(
@@ -111,6 +118,7 @@ class AsyncHttpClient:
                     or "Authentication failed."
                 ) from error
 
+            # 404
             if status_code == 404:
 
                 raise NotFoundError(
@@ -118,6 +126,7 @@ class AsyncHttpClient:
                     or "Resource not found."
                 ) from error
 
+            # 429
             if status_code == 429:
 
                 retry_after = response.headers.get(
@@ -129,10 +138,13 @@ class AsyncHttpClient:
                 if retry_after is not None:
 
                     try:
+
                         retry_seconds = int(
                             retry_after
                         )
+
                     except ValueError:
+
                         pass
 
                 raise RateLimitError(
@@ -141,15 +153,18 @@ class AsyncHttpClient:
                     retry_after=retry_seconds
                 ) from error
 
+            # Other HTTP errors
             raise APIError(
                 message,
                 status_code=status_code
             ) from error
 
+        # 204 No Content
         if response.status_code == 204:
 
             return None
 
+        # Empty response
         if not response.content:
 
             return None
@@ -160,7 +175,7 @@ class AsyncHttpClient:
     # COMMON REQUEST
     # ==========================================
 
-    async def _request(
+    def _request(
         self,
         method: str,
         path: str,
@@ -169,13 +184,17 @@ class AsyncHttpClient:
         json: dict | None = None
     ):
 
+        self.logger.info(
+            f"{method} {path}"
+        )
+
         for attempt in range(
             self.max_retries + 1
         ):
 
             try:
 
-                response = await self.client.request(
+                response = self.client.request(
                     method=method,
                     url=path,
                     params=params,
@@ -183,6 +202,10 @@ class AsyncHttpClient:
                 )
 
             except httpx.RequestError as error:
+
+                self.logger.warning(
+                    f"Network error: {error}"
+                )
 
                 if attempt >= self.max_retries:
 
@@ -194,11 +217,18 @@ class AsyncHttpClient:
                     attempt
                 )
 
-                import asyncio
+                self.logger.warning(
+                    f"Retrying in {delay} seconds "
+                    f"(attempt {attempt + 1}/{self.max_retries})"
+                )
 
-                await asyncio.sleep(delay)
+                time.sleep(delay)
 
                 continue
+
+            self.logger.info(
+                f"Response: {response.status_code}"
+            )
 
             if self._should_retry(
                 response.status_code
@@ -210,13 +240,17 @@ class AsyncHttpClient:
                         attempt
                     )
 
-                    import asyncio
+                    self.logger.warning(
+                        f"Retrying HTTP {response.status_code} "
+                        f"in {delay} seconds "
+                        f"(attempt {attempt + 1}/{self.max_retries})"
+                    )
 
-                    await asyncio.sleep(delay)
+                    time.sleep(delay)
 
                     continue
 
-            return await self._handle_response(
+            return self._handle_response(
                 response
             )
 
@@ -224,13 +258,13 @@ class AsyncHttpClient:
     # GET
     # ==========================================
 
-    async def get(
+    def get(
         self,
         path: str,
         params: dict | None = None
     ):
 
-        return await self._request(
+        return self._request(
             "GET",
             path,
             params=params
@@ -240,13 +274,13 @@ class AsyncHttpClient:
     # POST
     # ==========================================
 
-    async def post(
+    def post(
         self,
         path: str,
         json: dict | None = None
     ):
 
-        return await self._request(
+        return self._request(
             "POST",
             path,
             json=json
@@ -256,14 +290,30 @@ class AsyncHttpClient:
     # PUT
     # ==========================================
 
-    async def put(
+    def put(
         self,
         path: str,
         json: dict | None = None
     ):
 
-        return await self._request(
+        return self._request(
             "PUT",
+            path,
+            json=json
+        )
+
+    # ==========================================
+    # PATCH
+    # ==========================================
+
+    def patch(
+        self,
+        path: str,
+        json: dict | None = None
+    ):
+
+        return self._request(
+            "PATCH",
             path,
             json=json
         )
@@ -272,12 +322,12 @@ class AsyncHttpClient:
     # DELETE
     # ==========================================
 
-    async def delete(
+    def delete(
         self,
         path: str
     ):
 
-        return await self._request(
+        return self._request(
             "DELETE",
             path
         )
@@ -286,6 +336,6 @@ class AsyncHttpClient:
     # CLOSE
     # ==========================================
 
-    async def close(self):
+    def close(self):
 
-        await self.client.aclose()
+        self.client.close()

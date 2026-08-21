@@ -1,24 +1,14 @@
-from mycompany import MyCompanyClient
+"""
+Manual verification script for installed GeoVista SDK.
+"""
+from geovista import GeoVistaClient
 
-
-client = MyCompanyClient(
+client = GeoVistaClient(
     api_key="test-api-key",
     base_url="http://127.0.0.1:8000"
 )
 
 try:
-
-    users = client.users.list()
-
-    print("Users:")
-
-    for user in users.items:
-        print(
-            f"{user.id} - "
-            f"{user.name} - "
-            f"{user.email}"
-        )
-
+    print("GeoVista SDK initialized successfully.")
 finally:
-
     client.close()

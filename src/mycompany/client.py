@@ -1,7 +1,6 @@
 import os
 
 from .http_client import HttpClient
-from .resources.users import UsersResource
 from .exceptions import AuthenticationError
 
 
@@ -30,10 +29,6 @@ class MyCompanyClient:
             api_key=api_key,
             timeout=timeout,
             max_retries=max_retries
-        )
-
-        self.users = UsersResource(
-            self.http
         )
 
     def close(self):

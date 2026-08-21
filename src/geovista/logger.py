@@ -2,7 +2,7 @@ import logging
 
 
 def get_logger(
-    name: str = "mycompany"
+    name: str = "geovista"
 ) -> logging.Logger:
 
     logger = logging.getLogger(name)
