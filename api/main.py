@@ -1,285 +1,138 @@
+from typing import Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 
-
 app = FastAPI(
-    title="MyCompany API",
+    title="GeoVista API",
     version="1.0.0"
 )
 
-
-# ==========================================
-# API KEY
-# ==========================================
-
 VALID_API_KEY = "test-api-key"
 
-
-# ==========================================
-# DATABASE - TEMPORARY IN-MEMORY DATA
-# ==========================================
-
-users = [
+# In-memory database for Datasets
+datasets = [
     {
-        "id": 1,
-        "name": "Sasi",
-        "email": "sasi@example.com"
-    },
-    {
-        "id": 2,
-        "name": "John",
-        "email": "john@example.com"
+        "id": "ds_1",
+        "name": "Default Dataset",
+        "description": "Initial sample dataset",
+        "public": True,
+        "category": "computer-vision",
+        "metadata": {}
     }
 ]
 
+next_ds_id = 2
 
-next_user_id = 3
 
-
-# ==========================================
-# MODELS
-# ==========================================
-
-class UserCreate(BaseModel):
-
+class DatasetCreate(BaseModel):
     name: str
-
-    email: str
-
-
-class UserUpdate(BaseModel):
-
-    name: str
-
-    email: str
+    description: Optional[str] = ""
+    category: Optional[str] = None
+    public: Optional[bool] = False
+    metadata: Optional[Dict[str, Any]] = None
 
 
-# ==========================================
-# AUTHENTICATION
-# ==========================================
+class DatasetUpdate(BaseModel):
+    description: Optional[str] = None
+    category: Optional[str] = None
+    public: Optional[bool] = None
+    metadata: Optional[Dict[str, Any]] = None
 
-def validate_api_key(
-    authorization: str | None
-):
 
+def validate_api_key(authorization: Optional[str]):
     if authorization is None:
-
-        raise HTTPException(
-            status_code=401,
-            detail="Authorization header is missing"
-        )
+        raise HTTPException(status_code=401, detail="Authorization header is missing")
 
     expected = f"Bearer {VALID_API_KEY}"
-
     if authorization != expected:
-
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid API key"
-        )
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-# ==========================================
-# GET USERS
-# PAGINATION + FILTERING
-# ==========================================
-
-@app.get("/api/users")
-def get_users(
+@app.get("/api/datasets")
+def get_datasets(
     page: int = 1,
-    page_size: int = 10,
-    search: str | None = None,
-    name: str | None = None,
-    email: str | None = None,
-    authorization: str | None = Header(default=None)
+    per_page: int = 10,
+    name: Optional[str] = None,
+    authorization: Optional[str] = Header(default=None)
 ):
-
-    # Authentication
     validate_api_key(authorization)
-
-    # Validate pagination
-    if page < 1:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Page must be greater than 0"
-        )
-
-    if page_size < 1:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Page size must be greater than 0"
-        )
-
-    # ======================================
-    # FILTER USERS
-    # ======================================
-
-    filtered_users = users.copy()
-
-    # Search name OR email
-    if search:
-
-        search_value = search.lower()
-
-        filtered_users = [
-            user
-            for user in filtered_users
-            if search_value in user["name"].lower()
-            or search_value in user["email"].lower()
-        ]
-
-    # Filter by name
+    filtered = datasets
     if name:
+        filtered = [d for d in filtered if name.lower() in d["name"].lower()]
 
-        name_value = name.lower()
-
-        filtered_users = [
-            user
-            for user in filtered_users
-            if name_value in user["name"].lower()
-        ]
-
-    # Filter by email
-    if email:
-
-        email_value = email.lower()
-
-        filtered_users = [
-            user
-            for user in filtered_users
-            if email_value in user["email"].lower()
-        ]
-
-    # ======================================
-    # PAGINATION
-    # ======================================
-
-    total = len(filtered_users)
-
-    start = (page - 1) * page_size
-
-    end = start + page_size
-
-    paginated_users = filtered_users[start:end]
-
-    # ======================================
-    # RESPONSE
-    # ======================================
+    start = (page - 1) * per_page
+    end = start + per_page
 
     return {
-        "items": paginated_users,
+        "items": filtered[start:end],
         "page": page,
-        "page_size": page_size,
-        "total": total
+        "per_page": per_page,
+        "total": len(filtered)
     }
 
 
-# ==========================================
-# GET ONE USER
-# ==========================================
-
-@app.get("/api/users/{user_id}")
-def get_user(
-    user_id: int,
-    authorization: str | None = Header(default=None)
+@app.post("/api/datasets", status_code=201)
+def create_dataset(
+    dataset: DatasetCreate,
+    authorization: Optional[str] = Header(default=None)
 ):
-
+    global next_ds_id
     validate_api_key(authorization)
 
-    for user in users:
-
-        if user["id"] == user_id:
-
-            return user
-
-    raise HTTPException(
-        status_code=404,
-        detail="User not found"
-    )
-
-
-# ==========================================
-# CREATE USER
-# ==========================================
-
-@app.post("/api/users")
-def create_user(
-    user: UserCreate,
-    authorization: str | None = Header(default=None)
-):
-
-    global next_user_id
-
-    validate_api_key(authorization)
-
-    new_user = {
-        "id": next_user_id,
-        "name": user.name,
-        "email": user.email
+    new_ds = {
+        "id": f"ds_{next_ds_id}",
+        "name": dataset.name,
+        "description": dataset.description or "",
+        "category": dataset.category,
+        "public": dataset.public or False,
+        "metadata": dataset.metadata or {}
     }
-
-    users.append(new_user)
-
-    next_user_id += 1
-
-    return new_user
+    datasets.append(new_ds)
+    next_ds_id += 1
+    return new_ds
 
 
-# ==========================================
-# UPDATE USER
-# ==========================================
-
-@app.put("/api/users/{user_id}")
-def update_user(
-    user_id: int,
-    user: UserUpdate,
-    authorization: str | None = Header(default=None)
+@app.get("/api/datasets/{dataset_id}")
+def get_dataset(
+    dataset_id: str,
+    authorization: Optional[str] = Header(default=None)
 ):
-
     validate_api_key(authorization)
-
-    for existing_user in users:
-
-        if existing_user["id"] == user_id:
-
-            existing_user["name"] = user.name
-
-            existing_user["email"] = user.email
-
-            return existing_user
-
-    raise HTTPException(
-        status_code=404,
-        detail="User not found"
-    )
+    for d in datasets:
+        if d["id"] == dataset_id:
+            return d
+    raise HTTPException(status_code=404, detail="Dataset not found")
 
 
-# ==========================================
-# DELETE USER
-# ==========================================
-
-@app.delete("/api/users/{user_id}")
-def delete_user(
-    user_id: int,
-    authorization: str | None = Header(default=None)
+@app.patch("/api/datasets/{dataset_id}")
+def update_dataset(
+    dataset_id: str,
+    updates: DatasetUpdate,
+    authorization: Optional[str] = Header(default=None)
 ):
-
     validate_api_key(authorization)
+    for d in datasets:
+        if d["id"] == dataset_id:
+            if updates.description is not None:
+                d["description"] = updates.description
+            if updates.category is not None:
+                d["category"] = updates.category
+            if updates.public is not None:
+                d["public"] = updates.public
+            if updates.metadata is not None:
+                d["metadata"] = updates.metadata
+            return d
+    raise HTTPException(status_code=404, detail="Dataset not found")
 
-    for index, user in enumerate(users):
 
-        if user["id"] == user_id:
-
-            deleted_user = users.pop(index)
-
-            return {
-                "message": "User deleted successfully",
-                "user": deleted_user
-            }
-
-    raise HTTPException(
-        status_code=404,
-        detail="User not found"
-    )
+@app.delete("/api/datasets/{dataset_id}")
+def delete_dataset(
+    dataset_id: str,
+    authorization: Optional[str] = Header(default=None)
+):
+    validate_api_key(authorization)
+    for i, d in enumerate(datasets):
+        if d["id"] == dataset_id:
+            deleted = datasets.pop(i)
+            return {"message": "Dataset deleted", "dataset": deleted}
+    raise HTTPException(status_code=404, detail="Dataset not found")

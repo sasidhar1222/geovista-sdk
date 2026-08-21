@@ -1,32 +1,18 @@
 import asyncio
-
-from mycompany import AsyncMyCompanyClient
+from geovista import AsyncGeoVistaClient
 
 
 async def main():
-
-    client = AsyncMyCompanyClient(
+    client = AsyncGeoVistaClient(
         api_key="test-api-key",
         base_url="http://127.0.0.1:8000"
     )
 
     try:
-
-        # This is where await is used
-        users = await client.users.list()
-
-        print("--- ASYNC USERS ---")
-
-        for user in users.items:
-            print(
-                f"{user.id} - "
-                f"{user.name} - "
-                f"{user.email}"
-            )
-
+        print("Async GeoVista client initialized successfully.")
     finally:
-
         await client.close()
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
